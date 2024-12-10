@@ -127,6 +127,9 @@ curl http://localhost:8000/items
 
 ![10](static/10.png)
 
+همچنین با POSTMAN هم می‌توانیم راحت‌تر همین دستورات را تست کنیم. مثلا:
+![11](static/11.png)
+
 ## Load Balancer (LB) Component
 ...
 
