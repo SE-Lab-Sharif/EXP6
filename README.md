@@ -128,13 +128,346 @@ curl http://localhost:8000/items
 ![10](static/10.png)
 
 همچنین با POSTMAN هم می‌توانیم راحت‌تر همین دستورات را تست کنیم. مثلا:
-![11](static/11.png)
+![22](static/22.png)
 
 ## Load Balancer (LB) Component
-...
+از لود بالانسر آماده nginx استفاده کردیم فایل کانفیگ آن مطابق روبرو است.
+```conf
+worker_processes 1;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream backend_servers {
+        server backend:8000; # Load Balancer درخواست‌ها را به سرورهای Backend ارسال می‌کند
+    }
+
+    server {
+        listen 80;
+
+        location / {
+            proxy_pass http://backend_servers;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+}
+
+```
+
+
 
 ## Docker Compose
-...
+
+### توضیحات خط به خط فایل داکر کامپوز
+
+#### نسخه فایل داکر کامپوز
+```yaml
+version: '3.8'
+```
+این خط نسخه داکر کامپوز را مشخص می‌کند. نسخه `3.8` یکی از نسخه‌های پایدار و متداول برای استفاده است.
+
+---
+
+#### سرویس‌ها (Services)
+```yaml
+services:
+```
+این بخش تعریف تمام سرویس‌هایی است که داکر کامپوز مدیریت خواهد کرد.
+
+---
+
+#### سرویس پایگاه داده PostgreSQL
+```yaml
+  postgres:
+    image: postgres:13
+```
+- **`postgres`**: نام سرویس است که برای ارتباط با سرویس‌های دیگر استفاده می‌شود.
+- **`image: postgres:13`**: ایمیج داکر PostgreSQL نسخه 13 را دانلود و اجرا می‌کند.
+
+---
+
+```yaml
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+```
+- **`POSTGRES_DB`**: نام دیتابیس پیش‌فرض (در اینجا `postgres`).
+- **`POSTGRES_USER`**: نام کاربر پایگاه داده (در اینجا `postgres`).
+- **`POSTGRES_PASSWORD`**: رمز عبور پایگاه داده (در اینجا `postgres`).
+
+---
+
+```yaml
+    ports:
+      - "5433:5432"
+```
+- **`5433:5432`**: پورت `5432` که پورت پیش‌فرض PostgreSQL است، به پورت `5433` روی ماشین میزبان متصل می‌شود.
+
+---
+
+```yaml
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+```
+- **`healthcheck`**: این قسمت وضعیت سلامت سرویس PostgreSQL را بررسی می‌کند.
+  - **`test`**: دستور `pg_isready` اجرا می‌شود تا بررسی کند دیتابیس آماده است یا خیر.
+  - **`interval`**: فاصله زمانی بین چک‌ها (5 ثانیه).
+  - **`timeout`**: زمان انتظار برای پاسخ (5 ثانیه).
+  - **`retries`**: تعداد تلاش‌ها (5 بار).
+
+---
+
+#### سرویس بک‌اند
+```yaml
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+```
+- **`backend`**: نام سرویس برای اجرای اپلیکیشن بک‌اند.
+- **`build`**:
+  - **`context`**: دایرکتوری محلی که فایل‌های بک‌اند در آن قرار دارند.
+  - **`dockerfile`**: فایل `Dockerfile` مورد استفاده برای ساخت ایمیج.
+
+---
+
+```yaml
+    ports:
+      - "8000:8000"
+```
+- **`8000:8000`**: پورت `8000` روی کانتینر به پورت `8000` روی ماشین میزبان متصل می‌شود.
+
+---
+
+```yaml
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+```
+- **`DB_HOST`**: آدرس سرویس پایگاه داده (در اینجا `postgres` که نام سرویس است).
+- **`DB_NAME`**: نام دیتابیس (`postgres`).
+- **`DB_USER`**: نام کاربر پایگاه داده (`postgres`).
+- **`DB_PASSWORD`**: رمز عبور پایگاه داده (`postgres`).
+
+---
+
+```yaml
+    depends_on:
+      postgres:
+        condition: service_healthy
+```
+- **`depends_on`**: مشخص می‌کند که این سرویس به سرویس `postgres` وابسته است.
+- **`condition: service_healthy`**: سرویس `backend` فقط زمانی اجرا می‌شود که `postgres` سالم باشد.
+
+---
+
+#### فایل کامل
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend1:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend2:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8000"
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  backend3:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8000"
+    environment:
+      - DB_HOST=postgres
+      - DB_NAME=postgres
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+```
+
+
+برای اینکه چند `instance` از `backend` که به یک `database` وصل هستند بالا بیاوریم، در صورتی که Load Balancer نداشته باشیم، برای هر کدام یک config جدا تعریف می‌کنیم.
+
+در اینجا نمونه‌هایی از عملکرد صحیح Service در این حالت را مشاهده می‌کنیم.
+
+![11](static/11.png)
+
+![12](static/12.png)
+
+![13](static/13.png)
+
+![14](static/14.png)
+
+![15](static/15.png)
+
+![16](static/16.png)
+
+![17](static/17.png)
+
+![18](static/18.png)
+
+![19](static/19.png)
+
+![20](static/20.png)
+
+![21](static/21.png)
+
+
+#### بخش deploy برای مقیاس‌پذیری سرویس
+
+```yaml
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+```
+
+- **`deploy`**: این بخش برای تعریف تنظیمات مربوط به نحوه اجرای سرویس استفاده می‌شود. این ویژگی در **Swarm Mode** قابل استفاده است.
+
+---
+
+### توضیحات جزئی‌تر
+
+#### `replicas: 3`
+- تعداد نسخه‌هایی از سرویس که باید اجرا شوند.
+- در اینجا، مقدار `3` مشخص می‌کند که سه نسخه از سرویس `backend` اجرا می‌شوند.
+
+---
+
+#### `restart_policy`
+- سیاست بازراه‌اندازی کانتینرها در صورت خطا.
+
+##### `condition: on-failure`
+- شرط بازراه‌اندازی: کانتینر تنها در صورتی که به دلیل خطا متوقف شود، دوباره اجرا خواهد شد.
+
+---
+
+### نکات مهم
+1. **Swarm Mode**:
+   - این بخش فقط در حالت Swarm داکر کار می‌کند.
+   - برای فعال کردن Swarm Mode، از دستور زیر استفاده کنید:
+     ```bash
+     docker swarm init
+     ```
+
+2. **بارگذاری و تعادل‌سازی (Load Balancing)**:
+   - در حالت Swarm، داکر به‌صورت خودکار درخواست‌ها را بین نسخه‌های مختلف سرویس (replicas) توزیع می‌کند.
+
+---
 
 ## Results of running complete system
+در این قسمت به نتایج اجرای کامل سیستم می‌پردازیم. در ابتدا، یک تست ابتدایی نوشته‌ایم که چندین درخواست GET همزمان ارسال می‌کند که ببینیم load balancer چگونه این موارد را مدیریت می‌کند. کد تست بصورت زیر است:
+  
+```python
+import requests
+import time
+from datetime import datetime
+
+
+def make_request():
+    try:
+        response = requests.get("http://localhost:8080/items")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        if response.status_code == 200:
+            print(f"[{timestamp}] Request successful")
+            return True
+        else:
+            print(f"[{timestamp}] Error: Status code {response.status_code}")
+            return False
+    except requests.exceptions.ConnectionError:
+        print(f"[{timestamp}] Connection failed - is the load balancer running?")
+        return False
+    except Exception as e:
+        print(f"[{timestamp}] Unexpected error: {str(e)}")
+        return False
+
+
+def main():
+    print("Starting load balance test...")
+    successful_requests = 0
+
+    for i in range(10):
+        if make_request():
+            successful_requests += 1
+        time.sleep(1)
+
+    print(f"\nCompleted: {successful_requests}/10 successful requests")
+
+
+if __name__ == "__main__":
+    main()
+```
+ضمنا خروجی این تست را در لاگ‌های docker با دستور `docker-compose logs -f` می‌توان دید:
+
+![26](static/26.jpg)
+
+و همچنین print های خود تست:
+![27](static/27.png)
+
+همچنین با دقت بیشتری توسط یک CLI مثل postman هم این را تست می‌کنیم. مثلا دو تا item جدید می‌سازیم:
+
+![23](static/23.png)
+
+![24](static/24.png)
+
+و در لاگ‌ها مشاهده می‌کنیم که به ۲ سرور مختلف ارسال شده‌اند. یکی `exp6-backend2-1` و دیگری `exp6-backend3-1`:
+
+![25](static/25.png)
+
+## نحوه بهبود سیسستم برای مدیریت لود بیشتر
+...
+
+## پاسخ به سوالات
 ...
