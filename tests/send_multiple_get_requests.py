@@ -4,9 +4,9 @@ from datetime import datetime
 
 
 def make_request():
+    timestamp = datetime.now().strftime("%H:%M:%S")
     try:
         response = requests.get("http://localhost:8080/items")
-        timestamp = datetime.now().strftime("%H:%M:%S")
         if response.status_code == 200:
             print(f"[{timestamp}] Request successful")
             return True
