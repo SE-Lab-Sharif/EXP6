@@ -381,4 +381,62 @@ services:
 ---
 
 ## Results of running complete system
-...
+در این قسمت به نتایج اجرای کامل سیستم می‌پردازیم. در ابتدا، یک تست ابتدایی نوشته‌ایم که چندین درخواست GET همزمان ارسال می‌کند که ببینیم load balancer چگونه این موارد را مدیریت می‌کند. کد تست بصورت زیر است:
+  
+```python
+import requests
+import time
+from datetime import datetime
+
+
+def make_request():
+    try:
+        response = requests.get("http://localhost:8080/items")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        if response.status_code == 200:
+            print(f"[{timestamp}] Request successful")
+            return True
+        else:
+            print(f"[{timestamp}] Error: Status code {response.status_code}")
+            return False
+    except requests.exceptions.ConnectionError:
+        print(f"[{timestamp}] Connection failed - is the load balancer running?")
+        return False
+    except Exception as e:
+        print(f"[{timestamp}] Unexpected error: {str(e)}")
+        return False
+
+
+def main():
+    print("Starting load balance test...")
+    successful_requests = 0
+
+    for i in range(10):
+        if make_request():
+            successful_requests += 1
+        time.sleep(1)
+
+    print(f"\nCompleted: {successful_requests}/10 successful requests")
+
+
+if __name__ == "__main__":
+    main()
+```
+ضمنا خروجی این تست را در لاگ‌های docker با دستور `docker-compose logs -f` می‌توان دید:
+
+![26](static/26.jpg)
+
+و همچنین print های خود تست:
+![27](static/27.png)
+
+همچنین با دقت بیشتری توسط یک CLI مثل postman هم این را تست می‌کنیم. مثلا دو تا item جدید می‌سازیم:
+
+![23](static/23.png)
+
+![24](static/24.png)
+
+و در لاگ‌ها مشاهده می‌کنیم که به ۲ سرور مختلف ارسال شده‌اند. یکی `exp6-backend2-1` و دیگری `exp6-backend3-1`:
+
+![25](static/25.png)
+
+
