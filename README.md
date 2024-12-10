@@ -131,7 +131,34 @@ curl http://localhost:8000/items
 ![22](static/22.png)
 
 ## Load Balancer (LB) Component
-...
+از لود بالانسر آماده nginx استفاده کردیم فایل کانفیگ آن مطابق روبرو است.
+```conf
+worker_processes 1;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream backend_servers {
+        server backend:8000; # Load Balancer درخواست‌ها را به سرورهای Backend ارسال می‌کند
+    }
+
+    server {
+        listen 80;
+
+        location / {
+            proxy_pass http://backend_servers;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+    }
+}
+
+```
+
+
 
 ## Docker Compose
 
