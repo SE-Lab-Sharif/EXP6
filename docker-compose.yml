@@ -17,12 +17,12 @@ services:
     networks:
       - app-network
 
-  backend1:
+  backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8001:8000"
+      - "8000"
     environment:
       - DB_HOST=postgres
       - DB_NAME=postgres
@@ -31,42 +31,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    deploy:
+      replicas: 10
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
     networks:
       - app-network
 
-  backend2:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8002:8000"
-    environment:
-      - DB_HOST=postgres
-      - DB_NAME=postgres
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - app-network
-
-  backend3:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "8003:8000"
-    environment:
-      - DB_HOST=postgres
-      - DB_NAME=postgres
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - app-network
 
   load-balancer:
     build:
@@ -75,9 +49,7 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      - backend1
-      - backend2
-      - backend3
+      - backend
     networks:
       - app-network
 
